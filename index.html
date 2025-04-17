@@ -1,21 +1,115 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-
-    <title>dither test</title>
+    <meta charset="UTF-8"> <!-- Set character encoding for the document -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Make the page responsive on all devices -->
+    <title>dither webcam demo</title> <!-- The title shown in the browser tab -->
     <style>
-        img {
-            height: 30em;
+        video {
+            display: none; /* Hide the video element (used only for capturing frames) */
         }
-
+        /* Info modal styling */
+        #info-modal {
+            display: inline-block;
+            vertical-align: top;
+            margin-left: 2em;
+            padding: 1em 1.5em;
+            background: rgba(0,0,0,0.8);
+            color: #fff;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 1em;
+            min-width: 200px;
+            max-width: 300px;
+        }
+        #dithered {
+            height: 20em;
+            margin: 1em;
+            display: inline-block;
+            vertical-align: top;
+        }
     </style>
 </head>
 <body>
-    <img src="/nts pic.jpeg" class="dither-me" />
-    <img src="/amelia-hamlin-photosx.webp" class="dither-me" />
-    <script src="dither.js"></script>
+    <h1>Webcam Dither Live Demo</h1>
+    <video id="webcam" autoplay playsinline></video> <!-- Hidden video element for webcam stream -->
+    <img id="dithered" alt="Dithered webcam will appear here" /> <!-- Image element to display the dithered result -->
+    <div id="info-modal">
+        <strong>Info</strong><br>
+        Frame rate: <span id="fps">0</span> FPS<br>
+        Resolution: <span id="res">-</span><br>
+        Mirror: <span id="mirror">on</span><br>
+        <span id="other-info"></span>
+    </div>
+    <script src="dither.js"></script> <!-- Include the dithering script -->
+    <script>
+        // Get references to the video, image, and info elements
+        const video = document.getElementById('webcam');
+        const ditheredImg = document.getElementById('dithered');
+        const fpsSpan = document.getElementById('fps');
+        const resSpan = document.getElementById('res');
+        const mirrorSpan = document.getElementById('mirror');
+        const otherInfo = document.getElementById('other-info');
+        // Create a single offscreen canvas and image element for processing
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new window.Image();
+        let running = false; // Flag to ensure the loop starts only once
+        let lastFrameTime = performance.now();
+        let frameCount = 0;
+        let fps = 0;
+
+        // Request access to the user's webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream; // Set the video source to the webcam stream
+            })
+            .catch(err => {
+                alert('Could not access webcam: ' + err); // Show an error if webcam access fails
+            });
+
+        // Function to start the real-time dither update loop
+        function startDitherLoop() {
+            if (running) return; // Prevent multiple intervals
+            running = true;
+            setInterval(() => {
+                // Only process if the video has enough data
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    // Resize the canvas if the video size changes
+                    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                    }
+                    // Mirror the context horizontally before drawing
+                    ctx.save(); // Save the current context state
+                    ctx.setTransform(-1, 0, 0, 1, canvas.width, 0); // Flip horizontally
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height); // Draw the mirrored video frame
+                    ctx.restore(); // Restore the context to original state
+                    // When the image loads, apply the dither effect and update the display
+                    img.onload = function() {
+                        ditherImage(img); // ditherImage is defined in dither.js
+                        ditheredImg.src = img.src; // Show the dithered image
+                    };
+                    // Convert the canvas to a JPEG data URL for speed and set as image source
+                    img.src = canvas.toDataURL('image/jpeg', 0.5);
+
+                    // Update frame rate calculation
+                    frameCount++;
+                    const now = performance.now();
+                    if (now - lastFrameTime >= 1000) {
+                        fps = frameCount;
+                        frameCount = 0;
+                        lastFrameTime = now;
+                        fpsSpan.textContent = fps;
+                    }
+                    // Update resolution info
+                    resSpan.textContent = canvas.width + ' x ' + canvas.height;
+                }
+            }, 33); // Update at ~30 frames per second
+        }
+
+        // Start the dither loop when the video starts playing
+        video.addEventListener('play', startDitherLoop);
+    </script>
 </body>
 </html>         
