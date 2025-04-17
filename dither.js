@@ -51,4 +51,7 @@ function ditherImageOnCanvas(ctx, width, height) {
       }
     });
   });
+
+
+
   
